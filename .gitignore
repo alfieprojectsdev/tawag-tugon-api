@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Documentation
+# folder-structure.md
+# ADR.md
+# TECH-SPEC.md
+
+# Database
+*.db
+*.sqlite3
+
+# Environment variables
+.env
