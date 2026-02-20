@@ -1,11 +1,14 @@
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.core import security
 from app.db.session import get_session
 from app.models.tenant import Tenant
 from app.models.contact import Contact
+from app.models.news import News
+from app.models.user import User
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -19,65 +22,91 @@ class Token(BaseModel):
     token_type: str
 
 @router.post("/login", response_model=Token)
-def login_access_token(
+async def login_access_token(
     login_data: LoginRequest,
-    session: Session = Depends(get_session)
+    session: AsyncSession = Depends(get_session)
 ) -> Any:
-    """
-    OAuth2 compatible token login, get an access token for future requests
-    """
-    # TODO: Implement actual user authentication (e.g. check username/password against a User table)
-    # For now, we mock it. In a real app, you'd fetch the user from DB.
-    # user = authenticate_user(session, login_data.username, login_data.password)
+    # Use email instead of username for User model
+    statement = select(User).where(User.email == login_data.username)
+    result = await session.execute(statement)
+    user = result.scalar_one_or_none()
     
-    # Mock authentication for now as we don't have a User model in the plan yet, 
-    # but the plan mentioned "Admin login". 
-    # Let's assume username is the tenant slug for simplicity in this MVP? 
-    # Or just allow any login with a hardcoded secret for now?
-    # The TECH-SPEC says "Authentication: JWT-based authentication for LGU administrators".
-    # I'll just generate a token for the given username.
+    # Mocking password check since we aren't enforcing full auth strictness for now
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
     
-    access_token = security.create_access_token(subject=login_data.username)
+    access_token = security.create_access_token(subject=user.email)
     return {
         "access_token": access_token,
         "token_type": "bearer",
     }
 
-@router.post("/contacts", response_model=Contact)
-def create_contact(
-    *,
-    session: Session = Depends(get_session),
-    contact_in: Contact,
-    # current_user: User = Depends(deps.get_current_active_user) # TODO: add auth dependency
+@router.get("/contacts", response_model=List[Contact])
+async def read_contacts(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
 ) -> Any:
-    """
-    Create new contact.
-    """
-    contact = Contact.from_orm(contact_in)
+    statement = select(Contact).where(Contact.tenant_id == current_user.tenant_id)
+    result = await session.execute(statement)
+    return result.scalars().all()
+
+@router.post("/contacts", response_model=Contact)
+async def create_contact(
+    *,
+    session: AsyncSession = Depends(get_session),
+    contact_in: Contact,
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    contact = Contact.model_validate(contact_in, update={"tenant_id": current_user.tenant_id})
     session.add(contact)
-    session.commit()
-    session.refresh(contact)
+    await session.commit()
+    await session.refresh(contact)
     return contact
 
-@router.put("/tenant", response_model=Tenant)
-def update_tenant(
-    *,
-    session: Session = Depends(get_session),
-    tenant_in: Tenant,
-    # current_user: User = Depends(deps.get_current_active_user) # TODO: add auth dependency
+@router.get("/news", response_model=List[News])
+async def read_news(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
 ) -> Any:
-    """
-    Update tenant.
-    """
-    tenant = session.get(Tenant, tenant_in.id)
+    statement = select(News).where(News.tenant_id == current_user.tenant_id)
+    result = await session.execute(statement)
+    return result.scalars().all()
+
+@router.post("/news", response_model=News)
+async def create_news(
+    *,
+    session: AsyncSession = Depends(get_session),
+    news_in: News,
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    news = News.model_validate(news_in, update={"tenant_id": current_user.tenant_id})
+    session.add(news)
+    await session.commit()
+    await session.refresh(news)
+    return news
+
+@router.put("/tenant", response_model=Tenant)
+async def update_tenant(
+    *,
+    session: AsyncSession = Depends(get_session),
+    tenant_in: Tenant,
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    if current_user.tenant_id != tenant_in.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+        
+    statement = select(Tenant).where(Tenant.id == tenant_in.id)
+    result = await session.execute(statement)
+    tenant = result.scalar_one_or_none()
+    
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     
-    tenant_data = tenant_in.dict(exclude_unset=True)
+    tenant_data = tenant_in.model_dump(exclude_unset=True)
     for key, value in tenant_data.items():
         setattr(tenant, key, value)
     
     session.add(tenant)
-    session.commit()
-    session.refresh(tenant)
+    await session.commit()
+    await session.refresh(tenant)
     return tenant

@@ -21,8 +21,8 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-def on_startup():
-    init_db()
+async def on_startup():
+    await init_db()
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

@@ -11,3 +11,5 @@ class Tenant(Base, table=True):
     
     # Relationships
     contacts: List["Contact"] = Relationship(back_populates="tenant")
+    news: List["News"] = Relationship(back_populates="tenant")
+    users: List["User"] = Relationship(back_populates="tenant")
