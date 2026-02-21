@@ -7,6 +7,7 @@ class News(Base, table=True):
     title: str = Field(index=True)
     content: str
     published_date: datetime = Field(default_factory=datetime.utcnow)
+    source_url: Optional[str] = Field(default=None, description="URL of the original sourced article")
     
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     tenant: Optional["Tenant"] = Relationship(back_populates="news")

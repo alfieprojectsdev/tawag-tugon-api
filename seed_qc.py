@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker
 from app.db.session import engine
 from app.models.tenant import Tenant
 from app.models.contact import Contact
+from app.models.user import User
+from app.core.security import get_password_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +36,25 @@ async def seed_qc_data():
             logger.info(f"Created QC tenant with ID: {qc_tenant.id}")
         else:
             logger.info(f"QC tenant already exists with ID: {qc_tenant.id}")
+
+        # Check if admin user exists
+        statement = select(User).where(User.email == "admin@qc.gov.ph")
+        result = await session.execute(statement)
+        admin_user = result.scalar_one_or_none()
+
+        if not admin_user:
+            logger.info("Creating admin user...")
+            new_user = User(
+                email="admin@qc.gov.ph",
+                hashed_password=get_password_hash("your_password"),
+                role="admin",
+                tenant_id=qc_tenant.id
+            )
+            session.add(new_user)
+            await session.commit()
+            logger.info("Created admin user 'admin@qc.gov.ph' with password 'your_password'.")
+        else:
+            logger.info("Admin user already exists.")
 
         # Check if contact exists
         statement = select(Contact).where(Contact.tenant_id == qc_tenant.id, Contact.name == "QCPD Station 1 (API Test)")

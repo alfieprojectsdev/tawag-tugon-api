@@ -66,7 +66,7 @@ def seed_data():
         # Contacts for Vigan
         vigan_contacts = [
             Contact(name="Vigan City Police Station", phone_number="0998-987-6543", category="Police", priority=10, protocol="tel", tenant_id=vigan_tenant.id),
-            局Contact(name="Ilocos Sur Provincial Hospital", phone_number="077-722-2111", category="Medical", priority=9, protocol="tel", tenant_id=vigan_tenant.id),
+            Contact(name="Ilocos Sur Provincial Hospital", phone_number="077-722-2111", category="Medical", priority=9, protocol="tel", tenant_id=vigan_tenant.id),
             Contact(name="Vigan Fire Department", phone_number="077-722-1044", category="Fire", priority=8, protocol="tel", tenant_id=vigan_tenant.id),
         ]
 

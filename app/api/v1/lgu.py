@@ -1,5 +1,6 @@
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
@@ -13,28 +14,25 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 @router.post("/login", response_model=Token)
 async def login_access_token(
-    login_data: LoginRequest,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session)
 ) -> Any:
-    # Use email instead of username for User model
-    statement = select(User).where(User.email == login_data.username)
+    # OAuth2 uses 'username' by default, but we treat it as the email
+    statement = select(User).where(User.email == form_data.username)
     result = await session.execute(statement)
     user = result.scalar_one_or_none()
     
-    # Mocking password check since we aren't enforcing full auth strictness for now
-    if not user:
+    # Actually enforce the password check using your security context
+    if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
+    # Generate the JWT
     access_token = security.create_access_token(subject=user.email)
     return {
         "access_token": access_token,
@@ -110,3 +108,35 @@ async def update_tenant(
     await session.commit()
     await session.refresh(tenant)
     return tenant
+
+from pydantic import BaseModel, HttpUrl
+from app.services.scraper import scraper_service
+
+class ScrapeRequest(BaseModel):
+    url: HttpUrl
+
+@router.post("/scrape", response_model=dict)
+async def trigger_news_scrape(
+    scrape_in: ScrapeRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    """
+    Manually triggers the web scraper to fetch news from a target URL 
+    and store it under the current admin's LGU tenant.
+    """
+    try:
+        # Pass the current user's tenant_id so the news is linked to their specific LGU
+        news_item = await scraper_service.fetch_and_store_news(
+            session=session, 
+            tenant_id=current_user.tenant_id, 
+            url=str(scrape_in.url)
+        )
+        
+        if news_item:
+            return {"status": "success", "message": "News scraped and saved successfully!", "data": news_item.title}
+        else:
+            return {"status": "skipped", "message": "No new articles found or item already exists."}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
