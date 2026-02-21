@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert'; // <-- NEW: For parsing the JSON
+import 'package:http/http.dart' as http; // <-- NEW: The HTTP client
 import 'db_helper.dart'; // <-- 1. Import your new database engine
 
 void main() {
@@ -32,17 +34,15 @@ class SpeedDialScreen extends StatefulWidget {
 }
 
 class _SpeedDialScreenState extends State<SpeedDialScreen> {
-  // Variables to hold our database state
   List<Map<String, dynamic>> _contacts = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _refreshContacts(); // Load data the second the screen opens
+    _refreshContacts();
   }
 
-  // --- 3. The Read Operation ---
   Future<void> _refreshContacts() async {
     final data = await DatabaseHelper.instance.getContacts();
     setState(() {
@@ -51,17 +51,51 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
     });
   }
 
-  // --- 4. Temporary Write Operation (For testing) ---
-  Future<void> _seedDummyData() async {
-    await DatabaseHelper.instance.insertContact({
-      'name': 'Local DB Police (Test)',
-      'phone_number': '0917-999-0000',
-      'category': 'Police',
-      'priority': 10,
-      'protocol': 'tel',
-      'tenant_id': 1,
-    });
-    _refreshContacts(); // Tell the UI to redraw with the new row
+  // --- THE NEW SYNC FUNCTION ---
+  Future<void> _syncWithServer() async {
+    setState(() => _isLoading = true); // Show the loading spinner
+
+    try {
+      // ⚠️ REPLACE THIS IP AND ENDPOINT WITH YOUR ACTUAL THINKPAD IP AND FASTAPI ROUTE
+      // Make sure your FastAPI server is running! (uvicorn main:app --host 0.0.0.0 --port 8000)
+      final String apiUrl =
+          'http://192.168.1.73:8000/api/v1/public/qc/manifest';
+
+      print("Fetching manifest from $apiUrl...");
+      final response = await http.get(Uri.parse(apiUrl));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+        final List<dynamic> jsonList = jsonResponse['contacts'] ?? [];
+
+        // Clear the old cache to prevent duplicates when syncing
+        await DatabaseHelper.instance.clearContacts();
+
+        // Loop through the JSON and dump it into SQLite
+        for (var item in jsonList) {
+          await DatabaseHelper.instance.insertContact({
+            'name': item['name'],
+            'phone_number': item['phone_number'],
+            'category': item['category'] ?? 'General',
+            'priority': item['priority'] ?? 0,
+            'protocol': item['protocol'] ?? 'tel',
+            'tenant_id': item['tenant_id'] ?? 1,
+          });
+        }
+        print(
+          "Successfully synced ${jsonList.length} contacts to offline cache!",
+        );
+      } else {
+        print("Server error: ${response.statusCode}");
+      }
+    } catch (e) {
+      // If the phone has no internet, it will fail here.
+      // But because we are offline-first, the app won't crash! It just keeps using the old SQLite data.
+      print("Network failed, relying on offline cache. Error: $e");
+    }
+
+    // Tell the UI to redraw with the fresh SQLite data
+    await _refreshContacts();
   }
 
   @override
@@ -74,33 +108,32 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
         ),
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          // A manual sync button in the top right corner
+          IconButton(icon: const Icon(Icons.sync), onPressed: _syncWithServer),
+        ],
       ),
-      // --- 5. Conditional UI based on Database State ---
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _contacts.isEmpty
           ? const Center(
-              child: Text('Database is empty. Tap + to test SQLite.'),
+              child: Text(
+                'Database is empty. Tap the Sync icon to download data.',
+              ),
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16.0),
               itemCount: _contacts.length,
               itemBuilder: (context, index) {
                 final contact = _contacts[index];
-                // We map the database row directly to the UI card
                 return _buildContactCard(
                   contact['name'],
                   contact['phone_number'],
-                  Icons.local_police, // Hardcoded icon for now
+                  Icons.local_police,
                   Colors.blue[700]!,
                 );
               },
             ),
-      // The temporary button to test writing to SQLite
-      floatingActionButton: FloatingActionButton(
-        onPressed: _seedDummyData,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
