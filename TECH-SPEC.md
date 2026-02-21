@@ -5,12 +5,12 @@ A multi-tenant, white-label mobile application and headless CMS designed for Loc
 
 **2. Client Application (Mobile)**
 
-* **Framework:** Cross-platform framework (Flutter or React Native) to ensure unified iOS and Android delivery from a single codebase.
-* **Local Storage:** SQLite (via sqflite or WatermelonDB) to ensure the emergency directory and recent newsletters are fully accessible offline.
+* **Framework:** **Flutter** (Cross-platform native) to ensure unified iOS and Android delivery from a single codebase, specifically chosen for its high performance on lower-tier Android devices and UI consistency.
+* **Local Storage:** SQLite (via `sqflite`) to ensure the emergency directory and recent newsletters are fully accessible offline.
 * **Core Modules:**
-* *Emergency Dialer:* Deep-linked buttons triggering native OS protocols (`tel:`, `viber://`).
-* *LGU Configurator:* Initial setup screen where the app fetches its branding and data payload based on a selected `tenant_id`.
-* *News Feed:* A read-only view of community updates, cached locally upon the last successful network request.
+  * *Emergency Dialer:* Deep-linked buttons triggering native OS protocols (`tel:`, `viber://`).
+  * *LGU Configurator:* Initial setup screen where the app fetches its branding and data payload based on a selected `tenant_id`.
+  * *News Feed:* A read-only view of community updates, cached locally upon the last successful network request.
 
 
 

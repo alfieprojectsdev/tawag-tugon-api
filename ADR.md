@@ -2,10 +2,10 @@
 
 #### **ADR 001: Mobile Application Framework Strategy**
 
-* **Context:** The application must run reliably during disasters (offline access required), have deep hooks into native hardware (dialer, GPS), and be highly maintainable for a solo developer or small team managing multiple LGU deployments.
-* **Decision:** We will use a Cross-Platform Native framework (Flutter/React Native) rather than a Progressive Web App (PWA) or isolated Native codebases (Swift/Kotlin).
-* **Consequences:** * *Positive:* Halves development time; guarantees reliable offline caching and background push notifications (which iOS PWAs struggle with); allows automated build pipelines for generating multiple branded LGU apps.
-* *Negative:* Slightly larger app bundle size compared to a pure native app.
+* **Context:** The application must run reliably during disasters (offline access required), have deep hooks into native hardware (dialer, GPS), and be highly maintainable for a solo developer or small team managing multiple LGU deployments. We evaluated Flutter and React Native for this cross-platform requirement. 
+* **Decision:** We will exclusively use **Flutter** for the mobile client framework. 
+* **Consequences:** * *Positive:* Guarantees pixel-perfect UI rendering across devices (crucial for matching custom LGU design templates); provides superior performance on older, low-end Android devices typical in target demographics; offers highly stable local database integration via `sqflite` for our offline-first architecture. 
+  * *Negative:* Implementing the Phase 3 P2P Bluetooth Mesh network will require writing custom native code (Kotlin/Swift) via Method Channels, as Flutter's ecosystem for low-level hardware networking is less mature than React Native's.
 
 
 
