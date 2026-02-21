@@ -65,8 +65,12 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
       final response = await http.get(Uri.parse(apiUrl));
 
       if (response.statusCode == 200) {
+        print("Raw JSON Response: ${response.body}"); // <-- ADDED FOR DEBUGGING
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
         final List<dynamic> jsonList = jsonResponse['contacts'] ?? [];
+        print(
+          "Parsed contacts list length: ${jsonList.length}",
+        ); // <-- ADDED FOR DEBUGGING
 
         // Clear the old cache to prevent duplicates when syncing
         await DatabaseHelper.instance.clearContacts();
