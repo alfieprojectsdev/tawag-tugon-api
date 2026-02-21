@@ -1,8 +1,10 @@
+import 'package:intl/intl.dart'; // <-- NEW: For date formatting
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert'; // <-- NEW: For parsing the JSON
 import 'package:http/http.dart' as http; // <-- NEW: The HTTP client
 import 'db_helper.dart'; // <-- 1. Import your new database engine
+import 'env.dart'; // <-- Import the auto-generated env file
 
 void main() {
   runApp(const TawagTugonApp());
@@ -34,19 +36,23 @@ class SpeedDialScreen extends StatefulWidget {
 }
 
 class _SpeedDialScreenState extends State<SpeedDialScreen> {
+  int _selectedIndex = 0;
   List<Map<String, dynamic>> _contacts = [];
+  List<Map<String, dynamic>> _news = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _refreshContacts();
+    _refreshData();
   }
 
-  Future<void> _refreshContacts() async {
-    final data = await DatabaseHelper.instance.getContacts();
+  Future<void> _refreshData() async {
+    final contactsData = await DatabaseHelper.instance.getContacts();
+    final newsData = await DatabaseHelper.instance.getNews();
     setState(() {
-      _contacts = data;
+      _contacts = contactsData;
+      _news = newsData;
       _isLoading = false;
     });
   }
@@ -58,24 +64,20 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
     try {
       // ⚠️ REPLACE THIS IP AND ENDPOINT WITH YOUR ACTUAL THINKPAD IP AND FASTAPI ROUTE
       // Make sure your FastAPI server is running! (uvicorn main:app --host 0.0.0.0 --port 8000)
-      final String apiUrl =
-          'http://192.168.1.73:8000/api/v1/public/qc/manifest';
+      final String baseUrl = 'http://${Env.serverIp}:8000/api/v1/public/qc';
+      final String manifestUrl = '$baseUrl/manifest';
+      final String newsUrl = '$baseUrl/news';
 
-      print("Fetching manifest from $apiUrl...");
-      final response = await http.get(Uri.parse(apiUrl));
+      print("Fetching manifest from $manifestUrl...");
+      final responseManifest = await http.get(Uri.parse(manifestUrl));
 
-      if (response.statusCode == 200) {
-        print("Raw JSON Response: ${response.body}"); // <-- ADDED FOR DEBUGGING
-        final Map<String, dynamic> jsonResponse = json.decode(response.body);
+      if (responseManifest.statusCode == 200) {
+        final Map<String, dynamic> jsonResponse = json.decode(
+          responseManifest.body,
+        );
         final List<dynamic> jsonList = jsonResponse['contacts'] ?? [];
-        print(
-          "Parsed contacts list length: ${jsonList.length}",
-        ); // <-- ADDED FOR DEBUGGING
 
-        // Clear the old cache to prevent duplicates when syncing
         await DatabaseHelper.instance.clearContacts();
-
-        // Loop through the JSON and dump it into SQLite
         for (var item in jsonList) {
           await DatabaseHelper.instance.insertContact({
             'name': item['name'],
@@ -86,11 +88,30 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
             'tenant_id': item['tenant_id'] ?? 1,
           });
         }
-        print(
-          "Successfully synced ${jsonList.length} contacts to offline cache!",
-        );
+        print("Successfully synced ${jsonList.length} contacts.");
       } else {
-        print("Server error: ${response.statusCode}");
+        print("Manifest server error: ${responseManifest.statusCode}");
+      }
+
+      print("Fetching news from $newsUrl...");
+      final responseNews = await http.get(Uri.parse(newsUrl));
+
+      if (responseNews.statusCode == 200) {
+        final List<dynamic> jsonNewsList = json.decode(responseNews.body);
+
+        // REMOVED clearNews() to prevent nuking the database and wiping archive state
+        for (var item in jsonNewsList) {
+          await DatabaseHelper.instance.insertNews({
+            'title': item['title'] ?? 'No Title Provided',
+            'content': item['content'] ?? 'No content available.',
+            'source_url': item['source_url'] ?? '',
+            'published_date': item['published_date'] ?? '',
+            'tenant_id': item['tenant_id'] ?? 1,
+          });
+        }
+        print("Successfully synced ${jsonNewsList.length} news articles.");
+      } else {
+        print("News server error: ${responseNews.statusCode}");
       }
     } catch (e) {
       // If the phone has no internet, it will fail here.
@@ -99,16 +120,30 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
     }
 
     // Tell the UI to redraw with the fresh SQLite data
-    await _refreshContacts();
+    await _refreshData();
+  }
+
+  // Helper to format the ugly ISO string
+  String _formatDate(dynamic rawDateParam) {
+    if (rawDateParam == null) return '';
+    final String rawDate = rawDateParam.toString();
+    if (rawDate.isEmpty) return '';
+    try {
+      final parsedDate = DateTime.parse(rawDate);
+      // Formats to: "Feb 21, 2026, 1:07 PM"
+      return DateFormat('MMM d, yyyy, h:mm a').format(parsedDate);
+    } catch (e) {
+      return rawDate; // Fallback to raw string if parsing fails
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Emergency Contacts',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          _selectedIndex == 0 ? 'Emergency Contacts' : 'Local News',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -119,25 +154,149 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _contacts.isEmpty
-          ? const Center(
-              child: Text(
-                'Database is empty. Tap the Sync icon to download data.',
+          : _selectedIndex == 0
+          ? _buildContactsWidget()
+          : _buildNewsWidget(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.contact_phone),
+            label: 'Speed Dial',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.article),
+            label: 'Local News',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactsWidget() {
+    if (_contacts.isEmpty) {
+      return const Center(
+        child: Text('Database is empty. Tap the Sync icon to download data.'),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16.0),
+      itemCount: _contacts.length,
+      itemBuilder: (context, index) {
+        final contact = _contacts[index];
+        return _buildContactCard(
+          contact['name'],
+          contact['phone_number'],
+          Icons.local_police,
+          Colors.blue[700]!,
+        );
+      },
+    );
+  }
+
+  Widget _buildNewsWidget() {
+    if (_news.isEmpty) {
+      return const Center(
+        child: Text('No news available. Tap the Sync icon to download data.'),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16.0),
+      itemCount: _news.length,
+      itemBuilder: (context, index) {
+        final article = _news[index];
+        final url = article['source_url']?.toString() ?? '';
+
+        // Generate a unique key for the Dismissible to track the specific card
+        final uniqueKey =
+            article['id']?.toString() ?? article['title'] ?? index.toString();
+
+        return Dismissible(
+          key: Key(uniqueKey),
+          direction: DismissDirection.endToStart, // Swipe right-to-left
+          background: Container(
+            color: Colors.red.shade400,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            margin: const EdgeInsets.only(
+              bottom: 12,
+            ), // Match the card's margin
+            child: const Icon(Icons.delete_sweep, color: Colors.white),
+          ),
+          onDismissed: (direction) async {
+            // Remove the item from the local UI state
+            setState(() {
+              _news.removeAt(index);
+            });
+
+            // Actually archive it in the database so it stays hidden across sessions
+            await DatabaseHelper.instance.archiveNews(article['id']);
+
+            // Show a quick visual confirmation
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Announcement archived safely'),
+                duration: Duration(seconds: 2),
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _contacts.length,
-              itemBuilder: (context, index) {
-                final contact = _contacts[index];
-                return _buildContactCard(
-                  contact['name'],
-                  contact['phone_number'],
-                  Icons.local_police,
-                  Colors.blue[700]!,
+            );
+          },
+          child: Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => NewsDetailScreen(
+                      title: article['title'] ?? 'Untitled',
+                      content: article['content'] ?? 'No content available.',
+                      date: _formatDate(article['published_date']),
+                      sourceUrl: url,
+                    ),
+                  ),
                 );
               },
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      article['title'] ?? 'Untitled',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    if (article['published_date'] != null &&
+                        article['published_date'].toString().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
+                        child: Text(
+                          _formatDate(article['published_date']),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 8),
+                    Text(
+                      article['content'] ?? '',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
             ),
+          ),
+        );
+      },
     );
   }
 
@@ -170,6 +329,89 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
               print("ERROR: Could not launch dialer for $number");
             }
           },
+        ),
+      ),
+    );
+  }
+}
+
+class NewsDetailScreen extends StatelessWidget {
+  final String title;
+  final String content;
+  final String date;
+  final String sourceUrl;
+
+  const NewsDetailScreen({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.date,
+    required this.sourceUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Article Details'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          if (sourceUrl.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.open_in_browser),
+              tooltip: 'Read Original on Web',
+              onPressed: () async {
+                final Uri launchUri = Uri.parse(sourceUrl);
+                if (await canLaunchUrl(launchUri)) {
+                  await launchUrl(
+                    launchUri,
+                    mode: LaunchMode.externalApplication,
+                  );
+                }
+              },
+            ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+            ),
+            if (date.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                date,
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            Text(content, style: const TextStyle(fontSize: 16, height: 1.5)),
+            if (sourceUrl.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              Center(
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    final Uri launchUri = Uri.parse(sourceUrl);
+                    if (await canLaunchUrl(launchUri)) {
+                      await launchUrl(
+                        launchUri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.language),
+                  label: const Text('Read Original on Web'),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ],
         ),
       ),
     );

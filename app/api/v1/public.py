@@ -6,6 +6,7 @@ from app.db.session import get_session
 from app.api.deps import get_current_tenant
 from app.models.tenant import Tenant
 from app.models.contact import Contact
+from app.models.news import News
 
 router = APIRouter()
 
@@ -31,3 +32,18 @@ async def get_tenant_manifest(
         "is_active": tenant.is_active,
         "contacts": contacts
     }
+
+@router.get("/{tenant_slug}/news", response_model=list[News])
+async def get_tenant_news(
+    *,
+    session: AsyncSession = Depends(get_session),
+    tenant: Tenant = Depends(get_current_tenant)
+) -> Any:
+    """
+    Get LGU news/announcements for offline-first sync.
+    """
+    # Order by newest first
+    statement = select(News).where(News.tenant_id == tenant.id).order_by(News.published_date.desc())
+    result = await session.execute(statement)
+    news = result.scalars().all()
+    return news
