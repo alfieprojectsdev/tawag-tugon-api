@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // <-- 1. New Import
+import 'package:url_launcher/url_launcher.dart';
+import 'db_helper.dart'; // <-- 1. Import your new database engine
 
 void main() {
   runApp(const TawagTugonApp());
@@ -17,13 +18,51 @@ class TawagTugonApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0033A0)),
         useMaterial3: true,
       ),
-      home: const SpeedDialScreen(),
+      home: const SpeedDialScreen(), // This is now a StatefulWidget
     );
   }
 }
 
-class SpeedDialScreen extends StatelessWidget {
+// --- 2. Upgraded to StatefulWidget ---
+class SpeedDialScreen extends StatefulWidget {
   const SpeedDialScreen({super.key});
+
+  @override
+  State<SpeedDialScreen> createState() => _SpeedDialScreenState();
+}
+
+class _SpeedDialScreenState extends State<SpeedDialScreen> {
+  // Variables to hold our database state
+  List<Map<String, dynamic>> _contacts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshContacts(); // Load data the second the screen opens
+  }
+
+  // --- 3. The Read Operation ---
+  Future<void> _refreshContacts() async {
+    final data = await DatabaseHelper.instance.getContacts();
+    setState(() {
+      _contacts = data;
+      _isLoading = false;
+    });
+  }
+
+  // --- 4. Temporary Write Operation (For testing) ---
+  Future<void> _seedDummyData() async {
+    await DatabaseHelper.instance.insertContact({
+      'name': 'Local DB Police (Test)',
+      'phone_number': '0917-999-0000',
+      'category': 'Police',
+      'priority': 10,
+      'protocol': 'tel',
+      'tenant_id': 1,
+    });
+    _refreshContacts(); // Tell the UI to redraw with the new row
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,41 +75,31 @@ class SpeedDialScreen extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12.0),
-            child: Text(
-              "QUEZON CITY - DISTRICT 1",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-                letterSpacing: 1.2,
-              ),
+      // --- 5. Conditional UI based on Database State ---
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _contacts.isEmpty
+          ? const Center(
+              child: Text('Database is empty. Tap + to test SQLite.'),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: _contacts.length,
+              itemBuilder: (context, index) {
+                final contact = _contacts[index];
+                // We map the database row directly to the UI card
+                return _buildContactCard(
+                  contact['name'],
+                  contact['phone_number'],
+                  Icons.local_police, // Hardcoded icon for now
+                  Colors.blue[700]!,
+                );
+              },
             ),
-          ),
-          _buildContactCard(
-            "QCPD Station 1",
-            "0917-123-4567",
-            Icons.local_police,
-            Colors.blue[700]!,
-          ),
-          _buildContactCard(
-            "QC DRRMO",
-            "122",
-            Icons.emergency,
-            Colors.red[700]!,
-          ),
-
-          // Note: "Viber Only" will fail the 'tel:' check, which is a great test for our error handling!
-          _buildContactCard(
-            "Brgy. Santo Cristo",
-            "Viber Only",
-            Icons.chat,
-            Colors.purple[600]!,
-          ),
-        ],
+      // The temporary button to test writing to SQLite
+      floatingActionButton: FloatingActionButton(
+        onPressed: _seedDummyData,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -95,12 +124,9 @@ class SpeedDialScreen extends StatelessWidget {
         trailing: IconButton(
           icon: const Icon(Icons.call, color: Colors.green),
           onPressed: () async {
-            // --- 2. The Native Hardware Hook ---
-            // Clean the number of dashes or spaces just in case
             final cleanNumber = number.replaceAll(RegExp(r'[^\d+]'), '');
             final Uri launchUri = Uri(scheme: 'tel', path: cleanNumber);
 
-            // Ask the OS if there is an app that can handle 'tel:'
             if (await canLaunchUrl(launchUri)) {
               await launchUrl(launchUri);
             } else {
