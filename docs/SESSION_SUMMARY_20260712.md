@@ -72,7 +72,7 @@ deprecation (`lib/main.dart:315`).
 
 | # | Task | Blocker |
 |---|---|---|
-| 1 | Fix GitHub billing lock (settings/billing) | Alfie, browser only |
+| 1 | Fix GitHub billing lock (settings/billing) | Alfie, browser only — **deferred**, local build instead |
 | 2 | Re-run APK workflow, verify release + APK asset on v0.1.0 | after #1 |
 | 3 | Send Ayok the sign-off link + drafted message | Alfie |
 | 4 | Implement `LguConfig` + theme/tenant wiring | — |
@@ -80,3 +80,28 @@ deprecation (`lib/main.dart:315`).
 | 6 | SafeArea / edge-to-edge / status-bar theme | — |
 | 7 | Manifest: per-LGU label, Viber/Messenger/DIAL `<queries>` | — |
 | 8 | Add launcher-icon/splash packages (assets pending from Ayok's daughter) | sign-off item 3 |
+
+---
+
+## Update 2026-07-13 — local build plan (billing deferred)
+
+Billing fix deferred; APK will be built **locally** instead of via Actions.
+Toolchain audit on the T420 found nothing installed:
+
+- `flutter` missing — `.bashrc` PATH still has `/home/finch/flutter/bin` but the
+  directory is gone (stale from a previous install). Reinstall to that exact path
+  so PATH just works.
+- No Android SDK (`sdkmanager` absent, no `~/Android/Sdk`).
+- Present: Java 17 (`/usr/bin/java`), Android Studio at `/usr/local/android-studio`
+  (bundled JBR at `jbr/bin/java` usable). Disk: 40G free on `/home` — enough.
+
+**Install plan (next session):**
+1. Flutter SDK stable tarball (~1 GB, storage.googleapis.com) → `/home/finch/flutter`
+2. Android cmdline-tools (~150 MB, dl.google.com) → `~/Android/Sdk/cmdline-tools/latest`
+3. `sdkmanager` → platform-tools, latest platform + build-tools (~1.5 GB);
+   accept licenses (`flutter doctor --android-licenses`)
+4. `cd tawag_tugon_app && flutter pub get && flutter build apk --release`
+   — expect 10–30 min first Gradle build on this hardware
+5. APK lands at `tawag_tugon_app/build/app/outputs/flutter-apk/app-release.apk`;
+   hand to Ayok directly (or attach to the v0.1.0 release manually via
+   `gh release create v0.1.0 <apk> --prerelease`)
