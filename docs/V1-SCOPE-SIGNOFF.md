@@ -1,7 +1,7 @@
 # Tawag-Tugon V1 — Scope Sign-Off
 
-**For:** Chris "Ayok" Uybengkee
-**From:** Alfie Pelicano
+**For:** Chris "Ayok" Uybengkee<br>
+**From:** Alfie Pelicano<br>
 **Purpose:** Lock the Version 1 scope so build work can move without stalling on
 open questions. Full technical detail lives in `TECH-SPEC.md` and `README.md` in
 the project repo — this document is the short version, for decisions only.
@@ -151,6 +151,6 @@ this decision doesn't need to be made yet.
 Once the above is marked, V1 build proceeds against locked scope — no further
 scope questions until the demo is ready to show.
 
-**Name:** ______________________
-**Date:** ______________________
+**Name:** ______________________<br>
+**Date:** ______________________<br>
 **Signature / confirmation (email reply is fine):** ______________________
