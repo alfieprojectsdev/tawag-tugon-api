@@ -1,0 +1,74 @@
+name: Build & Release Android APK
+
+# Builds the Flutter app in tawag_tugon_app/ and attaches a downloadable
+# debug-signed release APK to a GitHub Release. Good enough for sideloading
+# onto test devices (Ayok / Alfie); NOT signed for Play Store distribution.
+#
+# Two ways to trigger:
+#   1. Push a version tag, e.g.:  git tag v0.1.0 && git push origin v0.1.0
+#   2. Run manually from the Actions tab ("Run workflow") for an ad-hoc build.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: "Release name/tag for this manual build (e.g. v0.1.0-test)"
+        required: true
+        default: "manual-build"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tawag_tugon_app
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.release_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Tawag-Tugon ${{ steps.tag.outputs.tag }}
+          body: |
+            Test build of the Tawag-Tugon Android app.
+            Debug-signed APK — for sideloading onto test devices only, not a
+            Play Store release. Download `app-release.apk` below and install
+            directly on an Android phone (enable "install from unknown
+            sources" if prompted).
+          files: tawag_tugon_app/build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: true
