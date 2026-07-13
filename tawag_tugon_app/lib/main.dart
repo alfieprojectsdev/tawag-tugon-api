@@ -323,10 +323,12 @@ class _SpeedDialScreenState extends State<SpeedDialScreen> {
             final cleanNumber = number.replaceAll(RegExp(r'[^\d+]'), '');
             final Uri launchUri = Uri(scheme: 'tel', path: cleanNumber);
 
-            if (await canLaunchUrl(launchUri)) {
+            // Don't gate on canLaunchUrl: with Android 11+ package
+            // visibility it reports false even when a handler exists.
+            try {
               await launchUrl(launchUri);
-            } else {
-              print("ERROR: Could not launch dialer for $number");
+            } catch (e) {
+              debugPrint("ERROR: Could not launch dialer for $number: $e");
             }
           },
         ),
@@ -349,6 +351,24 @@ class NewsDetailScreen extends StatelessWidget {
     required this.sourceUrl,
   });
 
+  // Launch directly instead of gating on canLaunchUrl: with Android 11+
+  // package visibility it reports false even when a browser exists.
+  Future<void> _openSourceUrl(BuildContext context) async {
+    try {
+      final launched = await launchUrl(
+        Uri.parse(sourceUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) throw Exception('no handler');
+    } catch (e) {
+      debugPrint("ERROR: Could not open $sourceUrl: $e");
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link in browser')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -360,15 +380,7 @@ class NewsDetailScreen extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.open_in_browser),
               tooltip: 'Read Original on Web',
-              onPressed: () async {
-                final Uri launchUri = Uri.parse(sourceUrl);
-                if (await canLaunchUrl(launchUri)) {
-                  await launchUrl(
-                    launchUri,
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              },
+              onPressed: () => _openSourceUrl(context),
             ),
         ],
       ),
@@ -396,15 +408,7 @@ class NewsDetailScreen extends StatelessWidget {
               const SizedBox(height: 32),
               Center(
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    final Uri launchUri = Uri.parse(sourceUrl);
-                    if (await canLaunchUrl(launchUri)) {
-                      await launchUrl(
-                        launchUri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    }
-                  },
+                  onPressed: () => _openSourceUrl(context),
                   icon: const Icon(Icons.language),
                   label: const Text('Read Original on Web'),
                 ),
