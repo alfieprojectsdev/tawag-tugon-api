@@ -25,3 +25,8 @@ wheels/
 # IDEs
 .idea/
 app/api/v1/lgu.scratch.py
+
+# Client-conversation docs stay local (never publish)
+docs/*reply-ayok*.md
+docs/*ayok-reply*.md
+docs/HANDOVER.md
