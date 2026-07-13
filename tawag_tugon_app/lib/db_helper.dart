@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'seed_data.dart';
 
 class DatabaseHelper {
   // 1. The Singleton setup
@@ -21,10 +22,35 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
+  }
+
+  // Bundled QC demo data so a fresh install works with zero network sync.
+  // Contacts only seed into an empty table (a later sync replaces them
+  // wholesale anyway); news reuses insertNews so source_url dedupe and
+  // archive state are respected.
+  Future _seedDB(Database db) async {
+    final existing = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM contacts'),
+    );
+    if (existing == 0) {
+      for (final contact in seedContacts) {
+        await db.insert('contacts', contact);
+      }
+    }
+    for (final article in seedNews) {
+      final match = await db.query(
+        'news',
+        where: 'source_url = ?',
+        whereArgs: [article['source_url']],
+      );
+      if (match.isEmpty) {
+        await db.insert('news', article);
+      }
+    }
   }
 
   // 3. Define the Schema (Matching your Python SQLModel)
@@ -56,6 +82,8 @@ class DatabaseHelper {
       is_archived INTEGER DEFAULT 0
     )
     ''');
+
+    await _seedDB(db);
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -78,6 +106,11 @@ class DatabaseHelper {
       await db.execute(
         'ALTER TABLE news ADD COLUMN is_archived INTEGER DEFAULT 0',
       );
+    }
+
+    if (oldVersion < 4) {
+      // Backfill bundled QC demo data for installs that predate seeding.
+      await _seedDB(db);
     }
   }
 
