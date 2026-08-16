@@ -45,10 +45,37 @@ informative. Consider splitting the extension out of the tel value, or dropping
   `protocol` field to the `Contact` model — PR #2 does not address this. Note
   `seed_qc.py:100` passes `protocol="tel"` to the fieldless model; SQLModel
   silently ignores the extra kwarg, which is why seeding still succeeds.
-- Local `tawag_tugon.db` now holds PR #2's 16-contact set from the test run
-  (untracked, harmless; becomes correct once PR #2 merges).
+- Local `tawag_tugon.db` now holds the 16-contact set from the test run
+  (untracked, harmless).
 
-## Not done (awaiting user)
-- PR #2 not merged — user asked only for a safety check.
+## Shipped this session (after the safety check)
+- **PR #2 squash-merged** to `main` (`a1f2490`).
+- Built release APK from merged `main` (47.3MB) and cut **v0.1.1**
+  (prerelease) with the APK attached; public download hash-verified against the
+  local build. v0.1.0 left intact.
+  https://github.com/alfieprojectsdev/tawag-tugon-api/releases/tag/v0.1.1
+- Shipped with the known EOC-landline extension mis-dial (user chose ship-as-is).
+- `pubspec.yaml` still `1.0.0+1` — internal versionCode not bumped (out of
+  build+attach scope); sideload reinstall works regardless.
+
+## Design update from Ayok (2026-08-16) — deferred
+Ayok proposed a **tiered connection ladder** for reaching a contact, in order:
+1. existing **Viber** contact → 2. **Facebook Messenger** → 3. fall back to the
+**native dialer** (`tel:`).
+
+This is the concrete product spec for the deferred `launchContact` /
+`protocol`-routing work (task #3), and is **deferred to a dedicated architecture
+doc** (`docs/CONNECTION-LADDER.md`, TBD) rather than planned in detail now, per
+Ayok/Alfie. Open design questions to resolve there: Viber "is this number
+registered?" detection is not cheaply answerable (package visibility only
+confirms Viber is *installed*, manifest already queries `com.viber.voip` /
+`com.facebook.orca`); the ladder is blocked by the same missing `protocol` field
+on `Contact` noted above; and Messenger needs an `m.me` handle, not a phone
+number, so it implies a separate contact attribute.
+
+## Still open / awaiting user
+- **RN resilience/feedback doc** (`docs/RESILIENCE-AND-FEEDBACK.md`) — planned,
+  not yet written; cloud plan pending.
+- **PR #1** (`folder-structure-eval-…`) still open, untouched.
 - Long-standing uncommitted build files (`gradle.properties`, `pubspec.lock`)
   still parked.
