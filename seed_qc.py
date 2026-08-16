@@ -66,6 +66,9 @@ async def seed_qc_data():
             # -- Life-threatening emergencies first --
             ("National Emergency Hotline", "911", "Emergency", 100),
             ("QC Emergency Hotline (Helpline 122)", "122", "Emergency", 95),
+            ("Emergency Operations Center (Landline)", "(02) 8988-4242 local 8038", "Emergency", 94),
+            ("Emergency Operations Center (Mobile 1)", "0947-885-9929", "Emergency", 93),
+            ("Emergency Operations Center (Mobile 2)", "0947-884-7498", "Emergency", 92),
             ("Philippine Red Cross", "143", "Medical", 90),
             ("QC Police District (QCPD)", "(02) 8925-8326", "Police", 85),
             ("QC Fire District", "(02) 8330-2344", "Fire", 80),
@@ -74,7 +77,7 @@ async def seed_qc_data():
             # -- Public safety / welfare --
             ("MMDA (Traffic & Road Emergencies)", "136", "Traffic", 60),
             ("Bantay Bata (Child Protection)", "163", "Social Welfare", 55),
-            ("Barangay San Vicente Hall", "(02) 8441-5644", "Barangay", 50),
+            ("Barangay San Vicente Hall", "(02) 8523-9330", "Barangay", 50),
             # -- Utilities --
             ("Meralco (Power Outages)", "16211", "Utility", 30),
             ("Manila Water (24/7 Hotline)", "1627", "Utility", 25),
